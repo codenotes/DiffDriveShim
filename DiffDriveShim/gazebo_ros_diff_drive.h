@@ -88,23 +88,35 @@ namespace gazebo {
       GazeboRosDiffDrive();
       ~GazeboRosDiffDrive();
    //   void Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf);
-	     void Load();
+	     void Load(bool useDummy=false);
       void Reset();
+	  void setNodeHandle(ros::NodeHandle * n)
+	  {
+		  if (gazebo_ros_) delete gazebo_ros_;
+
+		  gazebo_ros_ = n;
+	  }
+
+	  void Tick()
+	  {
+		  UpdateChild();
+	  }
 
     protected:
-      virtual void UpdateChild();
-      virtual void FiniChild();
+       void UpdateChild();
+  public:
+	  virtual void FiniChild();
 
     private:
       void publishOdometry(double step_time);
       void getWheelVelocities();
    //   void publishWheelTF(); 
-      void publishWheelJointState();
+  //    void publishWheelJointState();
       void UpdateOdometryEncoder();
 
 
       //GazeboRosPtr gazebo_ros_;
-	  ros::NodeHandle * gazebo_ros_;
+	  ros::NodeHandle * gazebo_ros_=0;
 
       //physics::ModelPtr parent;
    //   event::ConnectionPtr update_connection_;
@@ -122,6 +134,7 @@ namespace gazebo {
       // ROS STUFF
       ros::Publisher odometry_publisher_;
       ros::Subscriber cmd_vel_subscriber_;
+	  ros::Subscriber *cmd_vel_subscriber2_=0;
       boost::shared_ptr<tf::TransformBroadcaster> transform_broadcaster_;
 //      sensor_msgs::JointState joint_state_;
       ros::Publisher joint_state_publisher_;      

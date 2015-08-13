@@ -61,9 +61,12 @@
 
 #pragma warning( disable :4996)  
 
+#define WITH_LOGGING
+
 ros::Time getSimTime()
 {
-	return ros::Time::now();
+	ros::Time t=ros::Time::now();
+	return t;
 }
 
 namespace gazebo
@@ -110,10 +113,16 @@ GazeboRosDiffDrive::~GazeboRosDiffDrive() {}
 
 //#ifdef USE_GAZEBO
 //void GazeboRosDiffDrive::Load ( physics::ModelPtr _parent, sdf::ElementPtr _sdf )
-void GazeboRosDiffDrive::Load ( )
+void GazeboRosDiffDrive::Load (bool useDummy )
 {
 
-   // this->parent = _parent;
+//	if (gazebo_ros_) delete gazebo_ros_;
+
+//	setNodeHandle(new ros::NodeHandle());
+
+	joints_.push_back(* new Joint);
+	joints_.push_back(*new Joint);
+	// this->parent = _parent;
   //  gazebo_ros_ = GazeboRosPtr ( new GazeboRos ( _parent, _sdf, "DiffDrive" ) );
     // Make sure the ROS node for Gazebo has already been initialized
     //gazebo_ros_->isInitialized();
@@ -131,21 +140,38 @@ void GazeboRosDiffDrive::Load ( )
     //gazebo_ros_->getParameter<double> ( wheel_torque, "wheelTorque", 5.0 );
     //gazebo_ros_->getParameter<double> ( update_rate_, "updateRate", 100.0 );
     //
+	if (!useDummy)
+	{
+		gazebo_ros_->getParam("commandTopic", command_topic_);
+		gazebo_ros_->getParam("odometryTopic", odometry_topic_);
+		gazebo_ros_->getParam("odometryFrame", odometry_frame_);
+		gazebo_ros_->getParam("robotBaseFrame", robot_base_frame_);
+		gazebo_ros_->getParam("publishWheelTF", publishWheelTF_);
+		gazebo_ros_->getParam("publishWheelJointState", publishWheelJointState_);
 
-	gazebo_ros_->getParam("commandTopic", command_topic_);
+		gazebo_ros_->getParam("wheelSeparation", wheel_separation_);
+		gazebo_ros_->getParam("wheelDiameter", wheel_diameter_);
+		gazebo_ros_->getParam("wheelAcceleration", wheel_accel);
+		gazebo_ros_->getParam("wheelTorque", wheel_torque);
+		gazebo_ros_->getParam("updateRate", update_rate_);
+	}
+	else
+	{
 
-	gazebo_ros_->getParam("odometryTopic", odometry_topic_);
-	gazebo_ros_->getParam("odometryFrame", odometry_frame_ );
-	gazebo_ros_->getParam("robotBaseFrame", robot_base_frame_ );
-	gazebo_ros_->getParam("publishWheelTF", publishWheelTF_ );
-	gazebo_ros_->getParam("publishWheelJointState", publishWheelJointState_ );
+		command_topic_= "cmd_vel" ;
+		odometry_topic_= "odom" ;
+		odometry_frame_= "odom" ;
+		robot_base_frame_ = "base_footprint" ;
+		publishWheelTF_= false ;
+		publishWheelJointState_= false ;
 
-	gazebo_ros_->getParam("wheelSeparation", wheel_separation_ );
-	gazebo_ros_->getParam("wheelDiameter", wheel_diameter_ );
-	gazebo_ros_->getParam("wheelAcceleration", wheel_accel );
-	gazebo_ros_->getParam("wheelTorque", wheel_torque );
-	gazebo_ros_->getParam("updateRate", update_rate_);
+		 wheel_separation_= 0.34 ;
+		 wheel_diameter_= 0.15 ;
+		 wheel_accel= 0.0 ;
+		 wheel_torque= 5.0 ;
+		 update_rate_= 100.0 ;
 
+	}
 
 
 //	std::map<std::string, OdomSource> odomOptions;
@@ -176,18 +202,19 @@ void GazeboRosDiffDrive::Load ( )
 //    }
 //
 //    // Initialize update rate stuff
-//    if ( this->update_rate_ > 0.0 ) this->update_period_ = 1.0 / this->update_rate_;
-//    else this->update_period_ = 0.0;
-//    last_update_time_ = parent->GetWorld()->GetSimTime();
+    if ( this->update_rate_ > 0.0 ) this->update_period_ = 1.0 / this->update_rate_;
+    else this->update_period_ = 0.0;
+
+	last_update_time_ = getSimTime(); // parent->GetWorld()->GetSimTime();
 //
 //    // Initialize velocity stuff
-//    wheel_speed_[RIGHT] = 0;
-//    wheel_speed_[LEFT] = 0;
+    wheel_speed_[RIGHT] = 0;
+    wheel_speed_[LEFT] = 0;
 
     x_ = 0;
     rot_ = 0;
     alive_ = true;
-
+	
 
     //if (this->publishWheelJointState_)
     //{
@@ -287,7 +314,7 @@ void GazeboRosDiffDrive::publishWheelTF()
 #endif
 
 // Update the controller
-void GazeboRosDiffDrive::UpdateChild()
+void GazeboRosDiffDrive::UpdateChild() //this is Tick();
 {
   
     /* force reset SetParam("fmax") since Joint::Reset reset MaxForce to zero at
@@ -308,19 +335,30 @@ void GazeboRosDiffDrive::UpdateChild()
       }
     }
 #endif
+	
 
 
-    if ( odom_source_ == ENCODER ) UpdateOdometryEncoder();
-   // common::Time current_time = parent->GetWorld()->GetSimTime();
+	if (odom_source_ == ENCODER)
+	{
+		UpdateOdometryEncoder();
+	//	ROS_INFO_NAMED("interop", "jsize:%d",joints_.size());
+
+	}
+		// common::Time current_time = parent->GetWorld()->GetSimTime();
+
 	 ros::Time current_time = getSimTime();
 
 	 double seconds_since_last_update = (current_time - last_update_time_).toSec(); // .Double(); //greg
 
-    if ( seconds_since_last_update > update_period_ ) {
+	 ROS_INFO_NAMED("interop", "UPDATE CHILD, since last update:%f ct:%f lu:%f", seconds_since_last_update, current_time.toSec() , last_update_time_.toSec());
+    
+	
+	if ( seconds_since_last_update > update_period_ ) 
+	{
         if (this->publish_tf_) publishOdometry ( seconds_since_last_update );
        // if ( publishWheelTF_ ) publishWheelTF(); //greg
         
-		if ( publishWheelJointState_ ) publishWheelJointState();
+//		if ( publishWheelJointState_ ) publishWheelJointState();
 
         // Update robot in case new velocities have been requested
         getWheelVelocities();
@@ -340,6 +378,11 @@ void GazeboRosDiffDrive::UpdateChild()
 #else
             joints_[LEFT].SetVelocity ( 0, wheel_speed_[LEFT]/ ( wheel_diameter_ / 2.0 ) );
             joints_[RIGHT].SetVelocity ( 0, wheel_speed_[RIGHT]/ ( wheel_diameter_ / 2.0 ) );
+#ifdef WITH_LOGGING
+			ROS_INFO_NAMED("interop", "^actual wheel speed = %lf, issued wheel speed= %lf", current_speed[LEFT], wheel_speed_[LEFT]);
+			ROS_INFO_NAMED("interop", "^actual wheel speed = %lf, issued wheel speed= %lf", current_speed[RIGHT], wheel_speed_[RIGHT]);
+#endif
+
 #endif
         } else {
             if ( wheel_speed_[LEFT]>=current_speed[LEFT] )
@@ -351,9 +394,10 @@ void GazeboRosDiffDrive::UpdateChild()
                 wheel_speed_instr_[RIGHT]+=fmin ( wheel_speed_[RIGHT]-current_speed[RIGHT], wheel_accel * seconds_since_last_update );
             else
                 wheel_speed_instr_[RIGHT]+=fmax ( wheel_speed_[RIGHT]-current_speed[RIGHT], -wheel_accel * seconds_since_last_update );
-
-            // ROS_INFO("actual wheel speed = %lf, issued wheel speed= %lf", current_speed[LEFT], wheel_speed_[LEFT]);
-            // ROS_INFO("actual wheel speed = %lf, issued wheel speed= %lf", current_speed[RIGHT],wheel_speed_[RIGHT]);
+#ifdef WITH_LOGGING
+             ROS_INFO_NAMED("interop","*actual wheel speed = %lf, issued wheel speed= %lf", current_speed[LEFT], wheel_speed_[LEFT]);
+             ROS_INFO_NAMED("interop","*actual wheel speed = %lf, issued wheel speed= %lf", current_speed[RIGHT],wheel_speed_[RIGHT]);
+#endif
 
 #if GAZEBO_MAJOR_VERSION > 2
             joints_[LEFT]->SetParam ( "vel", 0, wheel_speed_instr_[LEFT] / ( wheel_diameter_ / 2.0 ) );
@@ -362,20 +406,49 @@ void GazeboRosDiffDrive::UpdateChild()
             joints_[LEFT].SetVelocity ( 0,wheel_speed_instr_[LEFT] / ( wheel_diameter_ / 2.0 ) );
             joints_[RIGHT].SetVelocity ( 0,wheel_speed_instr_[RIGHT] / ( wheel_diameter_ / 2.0 ) );
 #endif
-        }
+
+#ifdef WITH_LOGGING
+	
+			ROS_INFO_NAMED("interop", "+actual wheel speed = %lf, issued wheel speed= %lf", current_speed[LEFT], wheel_speed_[LEFT]);
+			ROS_INFO_NAMED("interop", "+actual wheel speed = %lf, issued wheel speed= %lf", current_speed[RIGHT], wheel_speed_[RIGHT]);
+#endif
+
+		
+		}
        // last_update_time_+= common::Time ( update_period_ );//greg
-		last_update_time_ = last_update_time_ + ros::Duration(update_period_); //TODO, set update period  greg
-    }
+		last_update_time_ = ros::Time::now();
+		last_update_time_ = last_update_time_ + ros::Duration(update_period_); //is this right? seems to work but not tested with period > 0
+		
+	
+	}
 }
 
 // Finalize the controller
 void GazeboRosDiffDrive::FiniChild()
 {
+	ROS_INFO_NAMED("interop", "Finichild called");
+	
+	cmd_vel_subscriber_.shutdown();
+	gazebo_ros_->shutdown();
+	
+
     alive_ = false;
     queue_.clear();
     queue_.disable();
-    gazebo_ros_->shutdown();
+   // gazebo_ros_->shutdown();
     callback_queue_thread_.join();
+
+	//new greag
+//	delete &joints_[0];
+//	delete &joints_[1];
+	 joints_.pop_back();
+	 joints_.pop_back();
+	joints_.empty();
+
+
+	ROS_INFO_NAMED("interop", "Finichild - callback_que_thread terminated, stats shutdown:%d", gazebo_ros_->ok());
+
+
 }
 
 void GazeboRosDiffDrive::getWheelVelocities()
@@ -387,23 +460,36 @@ void GazeboRosDiffDrive::getWheelVelocities()
 
     wheel_speed_[LEFT] = vr + va * wheel_separation_ / 2.0;
     wheel_speed_[RIGHT] = vr - va * wheel_separation_ / 2.0;
+
+    ROS_INFO_NAMED("interop", "in vel left:%f right:%f x:%f, rot:%f", wheel_speed_[LEFT], wheel_speed_[RIGHT],x_, rot_);
+
+
+
+
 }
 
 void GazeboRosDiffDrive::cmdVelCallback ( const geometry_msgs::Twist::ConstPtr& cmd_msg )
 {
+//	ROS_INFO_NAMED("interop", "BEFORE cmdCallback %f", cmd_msg.get()->linear.x);
+
     boost::mutex::scoped_lock scoped_lock ( lock );
     x_ = cmd_msg->linear.x;
     rot_ = cmd_msg->angular.z;
+//	ROS_INFO_NAMED("interop", "in cmdCallback %f", cmd_msg.get()->linear.x);
 }
 
 void GazeboRosDiffDrive::QueueThread()
 {
 	//greg, I guess it is a heartbeat. Not sure. 
     static const double timeout = 0.01;
+	//ROS_INFO_NAMED("interop", "***START QTHREAD");
 
 	while (alive_ && ros::ok()) {//gazebo_ros_->node()->ok()) {
+		//ROS_INFO_NAMED("interop", "_____LOOP QTHREAD");
+
 		queue_.callAvailable(ros::WallDuration(timeout));
 	}
+//	ROS_INFO_NAMED("interop", "-----exiting QueueThread");
 }
 
 void GazeboRosDiffDrive::UpdateOdometryEncoder()
@@ -415,9 +501,14 @@ void GazeboRosDiffDrive::UpdateOdometryEncoder()
     double seconds_since_last_update = ( current_time - last_odom_update_ ).Double();
     *///greg
 	
-	ros::Time current_time =getSimTime();
-	double seconds_since_last_update = (current_time - last_odom_update_).toSec(); // .Double(); //greg
 
+
+	ros::Time current_time =getSimTime();
+	//double seconds_since_last_update = (current_time - last_odom_update_); // .Double(); //greg
+	double seconds_since_last_update = current_time.toSec() - last_odom_update_.toSec(); // .Double(); //greg
+
+
+	ROS_INFO_NAMED("interop", "UPDATEODOMETRY secsincelast:%f, cur:%u, lodom:%u",seconds_since_last_update, current_time.toSec(), last_odom_update_.toSec());
 
 	last_odom_update_ = current_time;
 
